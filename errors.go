@@ -1,6 +1,7 @@
 /*
  * Simple caching library with expiration capabilities
  *     Copyright (c) 2013-2017, Christian Muehlhaeuser <muesli@gmail.com>
+ *     Copyright (c) 2022, Reinaldy Rafli <aldy505@tutanota.com>
  *
  *   For license see LICENSE.txt
  */

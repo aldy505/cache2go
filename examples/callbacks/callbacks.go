@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/muesli/cache2go"
+	"github.com/aldy505/cache2go"
 )
 
 func main() {
@@ -25,12 +25,12 @@ func main() {
 	})
 
 	// Caching a new item will execute the AddedItem callback.
-	cache.Add("someKey", 0, "This is a test!")
+	cache.Add("someKey", []byte("This is a test!"), 0)
 
 	// Let's retrieve the item from the cache
 	res, err := cache.Value("someKey")
 	if err == nil {
-		fmt.Println("Found value in cache:", res.Data())
+		fmt.Println("Found value in cache:", string(res))
 	} else {
 		fmt.Println("Error retrieving value from cache:", err)
 	}
@@ -40,10 +40,10 @@ func main() {
 
 	cache.RemoveAddedItemCallbacks()
 	// Caching a new item that expires in 3 seconds
-	res = cache.Add("anotherKey", 3*time.Second, "This is another test")
+	anotherKey := cache.Add("anotherKey", []byte("This is another test"), 3*time.Second)
 
 	// This callback will be triggered when the item is about to expire
-	res.SetAboutToExpireCallback(func(key interface{}) {
+	anotherKey.SetAboutToExpireCallback(func(key interface{}) {
 		fmt.Println("About to expire:", key.(string))
 	})
 

@@ -2,6 +2,7 @@
  * Simple caching library with expiration capabilities
  *     Copyright (c) 2012, Radu Ioan Fericean
  *                   2013-2017, Christian Muehlhaeuser <muesli@gmail.com>
+ *     Copyright (c) 2022, Reinaldy Rafli <aldy505@tutanota.com>
  *
  *   For license see LICENSE.txt
  */
@@ -31,7 +32,7 @@ func Cache(table string) *CacheTable {
 		if !ok {
 			t = &CacheTable{
 				name:  table,
-				items: make(map[interface{}]*CacheItem),
+				items: make(map[string]*CacheItem),
 			}
 			cache[table] = t
 		}

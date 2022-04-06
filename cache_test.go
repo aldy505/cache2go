@@ -1,11 +1,12 @@
 /*
  * Simple caching library with expiration capabilities
  *     Copyright (c) 2013-2017, Christian Muehlhaeuser <muesli@gmail.com>
+ *     Copyright (c) 2022, Reinaldy Rafli <aldy505@tutanota.com>
  *
  *   For license see LICENSE.txt
  */
 
-package cache2go
+package cache2go_test
 
 import (
 	"bytes"
@@ -15,6 +16,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/aldy505/cache2go"
 )
 
 var (
@@ -25,40 +28,35 @@ var (
 func TestCache(t *testing.T) {
 	// add an expiring item after a non-expiring one to
 	// trigger expirationCheck iterating over non-expiring items
-	table := Cache("testCache")
-	table.Add(k+"_1", 0*time.Second, v)
-	table.Add(k+"_2", 1*time.Second, v)
+	table := cache2go.Cache("testCache")
+	table.Add(k+"_1", []byte(v), 0*time.Second)
+	table.Add(k+"_2", []byte(v), 1*time.Second)
 
 	// check if both items are still there
 	p, err := table.Value(k + "_1")
-	if err != nil || p == nil || p.Data().(string) != v {
+	if err != nil {
 		t.Error("Error retrieving non expiring data from cache", err)
 	}
+
+	if string(p) != v {
+		t.Errorf("Error retrieving non expiring data from cache: %s", p)
+	}
+
 	p, err = table.Value(k + "_2")
-	if err != nil || p == nil || p.Data().(string) != v {
+	if err != nil {
 		t.Error("Error retrieving data from cache", err)
 	}
 
-	// sanity checks
-	if p.AccessCount() != 1 {
-		t.Error("Error getting correct access count")
-	}
-	if p.LifeSpan() != 1*time.Second {
-		t.Error("Error getting correct life-span")
-	}
-	if p.AccessedOn().Unix() == 0 {
-		t.Error("Error getting access time")
-	}
-	if p.CreatedOn().Unix() == 0 {
-		t.Error("Error getting creation time")
+	if string(p) != v {
+		t.Errorf("Error retrieving data from cache: %s", p)
 	}
 }
 
 func TestCacheExpire(t *testing.T) {
-	table := Cache("testCache")
+	table := cache2go.Cache("testCache")
 
-	table.Add(k+"_1", 250*time.Millisecond, v+"_1")
-	table.Add(k+"_2", 200*time.Millisecond, v+"_2")
+	table.Add(k+"_1", []byte(v+"_1"), 250*time.Millisecond)
+	table.Add(k+"_2", []byte(v+"_2"), 200*time.Millisecond)
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -85,8 +83,8 @@ func TestCacheExpire(t *testing.T) {
 
 func TestExists(t *testing.T) {
 	// add an expiring item
-	table := Cache("testExists")
-	table.Add(k, 0, v)
+	table := cache2go.Cache("testExists")
+	table.Add(k, []byte(v), 0)
 	// check if it exists
 	if !table.Exists(k) {
 		t.Error("Error verifying existing data in cache")
@@ -94,19 +92,19 @@ func TestExists(t *testing.T) {
 }
 
 func TestNotFoundAdd(t *testing.T) {
-	table := Cache("testNotFoundAdd")
+	table := cache2go.Cache("testNotFoundAdd")
 
-	if !table.NotFoundAdd(k, 0, v) {
+	if !table.NotFoundAdd(k, []byte(v), 0) {
 		t.Error("Error verifying NotFoundAdd, data not in cache")
 	}
 
-	if table.NotFoundAdd(k, 0, v) {
+	if table.NotFoundAdd(k, []byte(v), 0) {
 		t.Error("Error verifying NotFoundAdd data in cache")
 	}
 }
 
 func TestNotFoundAddConcurrency(t *testing.T) {
-	table := Cache("testNotFoundAdd")
+	table := cache2go.Cache("testNotFoundAdd")
 
 	var finish sync.WaitGroup
 	var added int32
@@ -114,7 +112,7 @@ func TestNotFoundAddConcurrency(t *testing.T) {
 
 	fn := func(id int) {
 		for i := 0; i < 100; i++ {
-			if table.NotFoundAdd(i, 0, i+id) {
+			if table.NotFoundAdd(strconv.Itoa(i), []byte(strconv.Itoa(i+id)), 0) {
 				atomic.AddInt32(&added, 1)
 			} else {
 				atomic.AddInt32(&idle, 1)
@@ -139,17 +137,17 @@ func TestNotFoundAddConcurrency(t *testing.T) {
 
 	t.Log(added, idle)
 
-	table.Foreach(func(key interface{}, item *CacheItem) {
-		v, _ := item.Data().(int)
-		k, _ := key.(int)
+	table.Foreach(func(key string, item *cache2go.CacheItem) {
+		v := item.Data()
+		k := key
 		t.Logf("%02x  %04x\n", k, v)
 	})
 }
 
 func TestCacheKeepAlive(t *testing.T) {
 	// add an expiring item
-	table := Cache("testKeepAlive")
-	p := table.Add(k, 250*time.Millisecond, v)
+	table := cache2go.Cache("testKeepAlive")
+	p := table.Add(k, []byte(v), 250*time.Millisecond)
 
 	// keep it alive before it expires
 	time.Sleep(100 * time.Millisecond)
@@ -170,13 +168,18 @@ func TestCacheKeepAlive(t *testing.T) {
 
 func TestDelete(t *testing.T) {
 	// add an item to the cache
-	table := Cache("testDelete")
-	table.Add(k, 0, v)
+	table := cache2go.Cache("testDelete")
+	table.Add(k, []byte(v), 0)
 	// check it's really cached
 	p, err := table.Value(k)
-	if err != nil || p == nil || p.Data().(string) != v {
+	if err != nil {
 		t.Error("Error retrieving data from cache", err)
 	}
+
+	if string(p) != v {
+		t.Errorf("Error retrieving data from cache: %s", p)
+	}
+
 	// try to delete it
 	table.Delete(k)
 	// verify it has been deleted
@@ -194,8 +197,8 @@ func TestDelete(t *testing.T) {
 
 func TestFlush(t *testing.T) {
 	// add an item to the cache
-	table := Cache("testFlush")
-	table.Add(k, 10*time.Second, v)
+	table := cache2go.Cache("testFlush")
+	table.Add(k, []byte(v), 10*time.Second)
 	// flush the entire table
 	table.Flush()
 
@@ -212,18 +215,22 @@ func TestFlush(t *testing.T) {
 
 func TestCount(t *testing.T) {
 	// add a huge amount of items to the cache
-	table := Cache("testCount")
+	table := cache2go.Cache("testCount")
 	count := 100000
 	for i := 0; i < count; i++ {
 		key := k + strconv.Itoa(i)
-		table.Add(key, 10*time.Second, v)
+		table.Add(key, []byte(v), 10*time.Second)
 	}
 	// confirm every single item has been cached
 	for i := 0; i < count; i++ {
 		key := k + strconv.Itoa(i)
 		p, err := table.Value(key)
-		if err != nil || p == nil || p.Data().(string) != v {
+		if err != nil {
 			t.Error("Error retrieving data")
+		}
+
+		if string(p) != v {
+			t.Errorf("Error retrieving data: %s", p)
 		}
 	}
 	// make sure the item count matches (no dupes etc.)
@@ -234,12 +241,12 @@ func TestCount(t *testing.T) {
 
 func TestDataLoader(t *testing.T) {
 	// setup a cache with a configured data-loader
-	table := Cache("testDataLoader")
-	table.SetDataLoader(func(key interface{}, args ...interface{}) *CacheItem {
-		var item *CacheItem
-		if key.(string) != "nil" {
-			val := k + key.(string)
-			i := NewCacheItem(key, 500*time.Millisecond, val)
+	table := cache2go.Cache("testDataLoader")
+	table.SetDataLoader(func(key string, args ...interface{}) *cache2go.CacheItem {
+		var item *cache2go.CacheItem
+		if key != "nil" {
+			val := k + key
+			i := cache2go.NewCacheItem(k, []byte(val), 500*time.Millisecond)
 			item = i
 		}
 
@@ -257,39 +264,13 @@ func TestDataLoader(t *testing.T) {
 		key := k + strconv.Itoa(i)
 		vp := k + key
 		p, err := table.Value(key)
-		if err != nil || p == nil || p.Data().(string) != vp {
+		if err != nil {
 			t.Error("Error validating data loader")
 		}
-	}
-}
 
-func TestAccessCount(t *testing.T) {
-	// add 100 items to the cache
-	count := 100
-	table := Cache("testAccessCount")
-	for i := 0; i < count; i++ {
-		table.Add(i, 10*time.Second, v)
-	}
-	// never access the first item, access the second item once, the third
-	// twice and so on...
-	for i := 0; i < count; i++ {
-		for j := 0; j < i; j++ {
-			table.Value(i)
+		if string(p) != vp {
+			t.Errorf("Error validating data loader: expected %s, got %s", vp, p)
 		}
-	}
-
-	// check MostAccessed returns the items in correct order
-	ma := table.MostAccessed(int64(count))
-	for i, item := range ma {
-		if item.Key() != count-1-i {
-			t.Error("Most accessed items seem to be sorted incorrectly")
-		}
-	}
-
-	// check MostAccessed returns the correct amount of items
-	ma = table.MostAccessed(int64(count - 1))
-	if len(ma) != count-1 {
-		t.Error("MostAccessed returns incorrect amount of items")
 	}
 }
 
@@ -303,30 +284,30 @@ func TestCallbacks(t *testing.T) {
 	calledExpired := false
 
 	// setup a cache with AddedItem & SetAboutToDelete handlers configured
-	table := Cache("testCallbacks")
-	table.SetAddedItemCallback(func(item *CacheItem) {
+	table := cache2go.Cache("testCallbacks")
+	table.SetAddedItemCallback(func(item *cache2go.CacheItem) {
 		m.Lock()
-		addedKey = item.Key().(string)
+		addedKey = item.Key()
 		m.Unlock()
 	})
-	table.SetAddedItemCallback(func(item *CacheItem) {
+	table.SetAddedItemCallback(func(item *cache2go.CacheItem) {
 		m.Lock()
 		calledAddedItem = true
 		m.Unlock()
 	})
-	table.SetAboutToDeleteItemCallback(func(item *CacheItem) {
+	table.SetAboutToDeleteItemCallback(func(item *cache2go.CacheItem) {
 		m.Lock()
-		removedKey = item.Key().(string)
+		removedKey = item.Key()
 		m.Unlock()
 	})
 
-	table.SetAboutToDeleteItemCallback(func(item *CacheItem) {
+	table.SetAboutToDeleteItemCallback(func(item *cache2go.CacheItem) {
 		m.Lock()
 		calledRemoveItem = true
 		m.Unlock()
 	})
 	// add an item to the cache and setup its AboutToExpire handler
-	i := table.Add(k, 500*time.Millisecond, v)
+	i := table.Add(k, []byte(v), 500*time.Millisecond)
 	i.SetAboutToExpireCallback(func(key interface{}) {
 		m.Lock()
 		expired = true
@@ -370,32 +351,32 @@ func TestCallbackQueue(t *testing.T) {
 	expired := false
 	calledExpired := false
 	// setup a cache with AddedItem & SetAboutToDelete handlers configured
-	table := Cache("testCallbacks")
+	table := cache2go.Cache("testCallbacks")
 
 	// test callback queue
-	table.AddAddedItemCallback(func(item *CacheItem) {
+	table.AddAddedItemCallback(func(item *cache2go.CacheItem) {
 		m.Lock()
-		addedKey = item.Key().(string)
+		addedKey = item.Key()
 		m.Unlock()
 	})
-	table.AddAddedItemCallback(func(item *CacheItem) {
+	table.AddAddedItemCallback(func(item *cache2go.CacheItem) {
 		m.Lock()
 		addedkeyCallback2 = secondCallbackResult
 		m.Unlock()
 	})
 
-	table.AddAboutToDeleteItemCallback(func(item *CacheItem) {
+	table.AddAboutToDeleteItemCallback(func(item *cache2go.CacheItem) {
 		m.Lock()
-		removedKey = item.Key().(string)
+		removedKey = item.Key()
 		m.Unlock()
 	})
-	table.AddAboutToDeleteItemCallback(func(item *CacheItem) {
+	table.AddAboutToDeleteItemCallback(func(item *cache2go.CacheItem) {
 		m.Lock()
 		removedKeyCallback = secondCallbackResult
 		m.Unlock()
 	})
 
-	i := table.Add(k, 500*time.Millisecond, v)
+	i := table.Add(k, []byte(v), 500*time.Millisecond)
 	i.AddAboutToExpireCallback(func(key interface{}) {
 		m.Lock()
 		expired = true
@@ -426,7 +407,7 @@ func TestCallbackQueue(t *testing.T) {
 	table.RemoveAboutToDeleteItemCallback()
 	secondItemKey := "itemKey02"
 	expired = false
-	i = table.Add(secondItemKey, 500*time.Millisecond, v)
+	i = table.Add(secondItemKey, []byte(v), 500*time.Millisecond)
 	i.SetAboutToExpireCallback(func(key interface{}) {
 		m.Lock()
 		expired = true
@@ -461,14 +442,38 @@ func TestLogger(t *testing.T) {
 	l := log.New(out, "cache2go ", log.Ldate|log.Ltime)
 
 	// setup a cache with this logger
-	table := Cache("testLogger")
+	table := cache2go.Cache("testLogger")
 	table.SetLogger(l)
-	table.Add(k, 0, v)
+	table.Add(k, []byte(v), 0)
 
 	time.Sleep(100 * time.Millisecond)
 
 	// verify the logger has been used
 	if out.Len() == 0 {
 		t.Error("Logger is empty")
+	}
+}
+
+func TestSanityChecks(t *testing.T) {
+	item := cache2go.NewCacheItem("key", []byte("value"), 0)
+
+	if item.LifeSpan() != 0 {
+		t.Error("LifeSpan should be 0")
+	}
+
+	if item.Key() != "key" {
+		t.Error("Key should be 'key'")
+	}
+
+	if string(item.Data()) != "value" {
+		t.Error("Data should be 'value'")
+	}
+
+	if item.AccessedOn().Unix() != time.Now().Unix() {
+		t.Error("AccessCount should be 0")
+	}
+
+	if item.CreatedOn().Unix() != time.Now().Unix() {
+		t.Error("CreatedOn should be 0")
 	}
 }

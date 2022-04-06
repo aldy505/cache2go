@@ -1,21 +1,25 @@
 /*
  * Simple caching library with expiration capabilities
  *     Copyright (c) 2013-2017, Christian Muehlhaeuser <muesli@gmail.com>
+ *     Copyright (c) 2022, Reinaldy Rafli <aldy505@tutanota.com>
  *
  *   For license see LICENSE.txt
  */
 
-package cache2go
+package cache2go_test
 
 import (
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/aldy505/cache2go"
 )
 
 func BenchmarkNotFoundAdd(b *testing.B) {
-	table := Cache("testNotFoundAdd")
+	table := cache2go.Cache("testNotFoundAdd")
 
 	var finish sync.WaitGroup
 	var added int32
@@ -23,7 +27,7 @@ func BenchmarkNotFoundAdd(b *testing.B) {
 
 	fn := func(id int) {
 		for i := 0; i < b.N; i++ {
-			if table.NotFoundAdd(i, 0, i+id) {
+			if table.NotFoundAdd(strconv.Itoa(i), []byte(strconv.Itoa(i+id)), 0) {
 				atomic.AddInt32(&added, 1)
 			} else {
 				atomic.AddInt32(&idle, 1)

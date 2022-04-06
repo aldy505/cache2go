@@ -1,10 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
-	"github.com/muesli/cache2go"
+	"github.com/aldy505/cache2go"
 )
 
 // Keys & values in cache2go can be of arbitrary types, e.g. a struct.
@@ -19,13 +20,16 @@ func main() {
 
 	// We will put a new item in the cache. It will expire after
 	// not being accessed via Value(key) for more than 5 seconds.
-	val := myStruct{"This is a test!", []byte{}}
-	cache.Add("someKey", 5*time.Second, &val)
+	val, _ := json.Marshal(myStruct{"This is a test!", []byte{}})
+
+	cache.Add("someKey", val, 5*time.Second)
 
 	// Let's retrieve the item from the cache.
 	res, err := cache.Value("someKey")
 	if err == nil {
-		fmt.Println("Found value in cache:", res.Data().(*myStruct).text)
+		var m myStruct
+		_ = json.Unmarshal(res, &m)
+		fmt.Println("Found value in cache:", m.text)
 	} else {
 		fmt.Println("Error retrieving value from cache:", err)
 	}
@@ -38,12 +42,7 @@ func main() {
 	}
 
 	// Add another item that never expires.
-	cache.Add("someKey", 0, &val)
-
-	// cache2go supports a few handy callbacks and loading mechanisms.
-	cache.SetAboutToDeleteItemCallback(func(e *cache2go.CacheItem) {
-		fmt.Println("Deleting:", e.Key(), e.Data().(*myStruct).text, e.CreatedOn())
-	})
+	cache.Add("someKey", val, 0)
 
 	// Remove the item from the cache.
 	cache.Delete("someKey")
